@@ -13,11 +13,11 @@
         <%- include('templates/top_menu.ejs') %>
     </div>
 
-    <div class="container_geral">
+    <div id="container-geral" class="container_geral">
         <form id="wizardForm"
             style="height: 100%; max-height: 100%; width: 100%; max-width: 100%; display: flex; flex-direction: column;"
             enctype="multipart/form-data">
-            <div class="step" id="step1">
+            <div class="step" id="step1" data-step="1" data-group="GeneralExplanation">
                 <div class="step-title">Section General Explanation</div>
                 <div class="step-content">
                     <h4>This section is dedicated to develop a Multi-Layer Perceptron (MLP) model for data
@@ -32,7 +32,7 @@
                 </div>
             </div>
 
-            <div class="step" id="step2">
+            <div class="step" id="step2" data-step="2" data-group="DatasetUpload">
                 <div class="step-title">Dataset Upload</div>
                 <div class="step-content">
                     <h3>Upload your dataset in CSV or Excel format.</h3>
@@ -48,6 +48,7 @@
                             <p id="uploadStatus"></p>
                         </div>
                     </div>
+                    <div id="descriptiveTableContainer"></div>
                     <script>
                         // Requisição inicial para buscar o nome do arquivo e número de variáveis ao carregar a página
                         window.addEventListener('DOMContentLoaded', () => {
@@ -65,7 +66,9 @@
 
                                     validateStep2Live();
                                     toggleFiltersContainer();
-                                    validateInputs();
+                                    validateKInputs();
+                                    fetchVariables(data.variaveis);
+                                    renderDescriptiveTable(data.descritiva_base);
                                 })
                                 .catch(error => {
                                     console.error('Erro ao carregar dataset:', error);
@@ -74,6 +77,175 @@
                                     validateStep2Live();
                                 });
                         });
+
+                        // Tabela da descritiva da base
+
+                        //Checagem de overflow para tooltip
+                        function hasTextOverflow(element) {
+                            // Cria um elemento temporário para medir o texto completo
+                            const tempElement = document.createElement('span');
+                            tempElement.style.visibility = 'hidden';
+                            tempElement.style.position = 'absolute';
+                            tempElement.style.whiteSpace = 'nowrap';
+                            tempElement.style.font = window.getComputedStyle(element).font;
+                            tempElement.textContent = element.textContent;
+
+                            document.body.appendChild(tempElement);
+                            const textWidth = tempElement.offsetWidth;
+                            document.body.removeChild(tempElement);
+
+                            // Largura disponível na célula (descontando padding)
+                            const computedStyle = window.getComputedStyle(element);
+                            const paddingLeft = parseFloat(computedStyle.paddingLeft);
+                            const paddingRight = parseFloat(computedStyle.paddingRight);
+                            const availableWidth = element.clientWidth - paddingLeft - paddingRight;
+
+                            // Margem de segurança para compensar diferenças de renderização
+                            return textWidth > (availableWidth - 2);
+                        }
+
+                        function checkOverflow(td) {
+                            if (hasTextOverflow(td)) {
+                                td.classList.add('has-overflow');
+                            } else {
+                                td.classList.remove('has-overflow');
+                            }
+                        }
+
+                        //Função para carregar a tabela
+                        function renderDescriptiveTable(descritiva_base) {
+                            const container = document.getElementById('descriptiveTableContainer');
+                            container.innerHTML = ''; // Limpa o conteúdo anterior
+
+                            // Verifica se há dados para renderizar
+                            if (!descritiva_base || descritiva_base.length === 0) {
+                                // Opcional: exibir mensagem ou não renderizar nada
+                                // container.textContent = 'Não há dados para exibir.';
+                                return;
+                            }
+
+                            const wrapper = document.createElement('div');
+                            wrapper.className = 'table-wrapper';
+
+                            // Cria cabeçalho fixo
+                            const headerDiv = document.createElement('div');
+                            headerDiv.className = 'table-header';
+                            const headerTable = document.createElement('table');
+                            headerTable.className = 'descriptive-table'; // table-layout: fixed; virá do CSS
+
+                            const headerThead = document.createElement('thead');
+                            const headerTR = document.createElement('tr');
+                            const columnKeys = Object.keys(descritiva_base[0]); // Assume que todas as linhas têm as mesmas chaves
+
+                            columnKeys.forEach(key => {
+                                const th = document.createElement('th');
+                                th.textContent = key;
+                                headerTR.appendChild(th);
+                            });
+                            headerThead.appendChild(headerTR);
+                            headerTable.appendChild(headerThead);
+                            headerDiv.appendChild(headerTable);
+
+                            // Cria área de scroll para o corpo
+                            const scrollDiv = document.createElement('div');
+                            scrollDiv.className = 'table-scroll';
+                            const bodyTable = document.createElement('table');
+                            bodyTable.className = 'descriptive-table'; // table-layout: fixed; virá do CSS
+
+                            // Adiciona <colgroup> para controlar a largura das colunas na tabela do corpo
+                            const colgroup = document.createElement('colgroup');
+                            columnKeys.forEach(() => {
+                                const col = document.createElement('col');
+                                colgroup.appendChild(col);
+                            });
+                            bodyTable.appendChild(colgroup);
+
+                            // Corpo da tabela
+                            const tbody = document.createElement('tbody');
+                            descritiva_base.forEach(rowData => {
+                                const tr = document.createElement('tr');
+                                columnKeys.forEach(key => { // Itera sobre columnKeys para garantir a ordem
+                                    const td = document.createElement('td');
+                                    td.textContent = rowData[key];
+                                    td.setAttribute('data-fulltext', rowData[key]);
+                                    tr.appendChild(td);
+                                });
+                                tbody.appendChild(tr);
+                            });
+                            bodyTable.appendChild(tbody);
+                            scrollDiv.appendChild(bodyTable);
+
+                            // Monta estrutura final
+                            wrapper.appendChild(headerDiv);
+                            wrapper.appendChild(scrollDiv);
+                            container.appendChild(wrapper);
+
+                            // Sincronizar larguras das colunas após a renderização no DOM
+                            requestAnimationFrame(() => {
+                                const headerThs = Array.from(headerTable.querySelectorAll('thead th'));
+                                const bodyCols = Array.from(bodyTable.querySelectorAll('colgroup col'));
+                                const firstBodyRowTds = tbody.querySelector('tr:first-child')
+                                    ? Array.from(tbody.querySelectorAll('tr:first-child td'))
+                                    : [];
+
+                                if (headerThs.length === 0) return; // Não há colunas para alinhar
+
+                                let columnWidths = [];
+
+                                if (firstBodyRowTds.length > 0) {
+                                    // Usa a largura das células da primeira linha do corpo como referência
+                                    columnWidths = firstBodyRowTds.map(td => td.offsetWidth);
+                                } else {
+                                    // Fallback: se não houver linhas no corpo, usa a largura intrínseca dos cabeçalhos
+                                    // Isso pode não ser ideal se o texto do cabeçalho for muito diferente do conteúdo esperado
+                                    columnWidths = headerThs.map(th => th.offsetWidth);
+                                }
+
+                                // Aplica as larguras calculadas
+                                if (columnWidths.length === headerThs.length) {
+                                    for (let i = 0; i < headerThs.length; i++) {
+                                        const widthPx = columnWidths[i] + 'px';
+
+                                        headerThs[i].style.width = widthPx;
+                                        headerThs[i].style.minWidth = widthPx; // Garante que não encolha
+
+                                        if (bodyCols[i]) {
+                                            bodyCols[i].style.width = widthPx;
+                                            // minWidth em <col> não é padrão, mas width é suficiente com table-layout:fixed
+                                        }
+                                    }
+                                }
+
+                                // Compensa a largura da barra de rolagem no cabeçalho
+                                const scrollbarWidth = scrollDiv.offsetWidth - scrollDiv.clientWidth;
+                                if (scrollbarWidth > 0) {
+                                    headerDiv.style.paddingRight = scrollbarWidth + 'px';
+                                    // headerDiv.style.boxSizing = 'border-box'; // Garante que padding não aumente a div se já tiver width
+                                } else {
+                                    headerDiv.style.paddingRight = '0px';
+                                }
+                            });
+
+                            const allTds = bodyTable.querySelectorAll('tbody td');
+                            allTds.forEach(td => {
+                                checkOverflow(td);
+                            });
+
+                            if (window.resizeObserver) {
+                                window.resizeObserver.disconnect();
+                            }
+
+                            window.resizeObserver = new ResizeObserver(() => {
+                                allTds.forEach(td => {
+                                    checkOverflow(td);
+                                });
+                            });
+
+                            window.resizeObserver.observe(container);
+                        }
+
+
+                        renderDescriptiveTable(descritiva_base)
                     </script>
                     <script>
                         // Fake FileInput
@@ -123,8 +295,9 @@
 
                                     validateStep2Live();
                                     toggleFiltersContainer();
-                                    validateInputs();
-                                    fetchVariables();
+                                    validateKInputs();
+                                    fetchVariables(data.variaveis);
+                                    renderDescriptiveTable(data.descritiva_base);
                                 })
                                 .catch(error => {
                                     console.error('There was a problem with the file upload:', error);
@@ -135,6 +308,24 @@
                                 });
                         });
                     </script>
+                    <div id="error-message-step2" class="error-message" style="margin-top: 0.5rem;"></div>
+                </div>
+                <script>
+                    function validateStep2Live() {
+                        const datasetName = document.getElementById('datasetFileName');
+                        const errorMessageStep2 = document.getElementById('error-message-step2');
+
+                        if (datasetName.innerText === "No dataset selected") {
+                            errorMessageStep2.innerText = "Select your dataset";
+                        } else {
+                            errorMessageStep2.innerText = "";
+                        }
+                    }
+                </script>
+            </div>
+            <div class="step" id="step3" data-step="3" data-group="Preprocessing">
+                <div class="step-title">Preprocessing</div>
+                <div class="step-content">
                     <div class="filters-container">
                         <div class="filter-group">
                             <p>Select your model's <b style="color: #008c9e;">target feature</b>:</p>
@@ -174,15 +365,10 @@
                         const selectedTarget = {};
                         const selectedDeleted = {};
 
-                        function fetchVariables() {
-                            fetch('/datasetFileName')
-                                .then(response => response.json())
-                                .then(data => {
-                                    options = data.variaveis;
-                                    filterOptions('target');
-                                    filterOptions('deleted');
-                                })
-                                .catch(error => console.error('Erro ao buscar as variáveis:', error));
+                        function fetchVariables(data) {
+                            options = data;
+                            filterOptions('target');
+                            filterOptions('deleted');
                         }
 
                         function updateSelection(checkbox, type) {
@@ -203,13 +389,18 @@
                                 delete otherGroup[checkbox.value];
 
                                 if (type === 'target') {
-                                    validateStep2Live();
+                                    validateStep3Live();
                                 }
                             } else {
                                 delete selectedGroup[checkbox.value];
                                 if (type === 'target') {
-                                    validateStep2Live();
+                                    validateStep3Live();
                                 }
+                            }
+
+                            if (type === 'deleted') {
+                                document.getElementById('k2').max = options.length - (1 + Object.keys(selectedDeleted).length);
+                                document.getElementById('k2').value = options.length - (1 + Object.keys(selectedDeleted).length);
                             }
 
                             filterOptions('target');
@@ -250,26 +441,22 @@
 
                         fetchVariables();
                     </script>
-                    <div id="error-message-step2" class="error-message" style="margin-top: 0.5rem;"></div>
-                </div>
-                <script>
-                    function validateStep2Live() {
-                        const datasetName = document.getElementById('datasetFileName');
-                        const errorMessageStep2 = document.getElementById('error-message-step2');
-                        const targetChecked = document.querySelectorAll('#checkbox-list-target input[type="checkbox"]:checked').length;
+                    <div id="error-message-step3" class="error-message" style="margin-top: 0.5rem;"></div>
+                    <script>
+                        function validateStep3Live() {
+                            const errorMessageStep3 = document.getElementById('error-message-step3');
+                            const targetChecked = document.querySelectorAll('#checkbox-list-target input[type="checkbox"]:checked').length;
 
-                        if (datasetName.innerText === "No dataset selected") {
-                            errorMessageStep2.innerText = "Select your dataset";
-                        } else if (targetChecked === 0) {
-                            errorMessageStep2.innerText = "Select your model's target feature";
-                        } else {
-                            errorMessageStep2.innerText = "";
+                            if (targetChecked === 0) {
+                                errorMessageStep3.innerText = "Select your model's target feature";
+                            } else {
+                                errorMessageStep3.innerText = "";
+                            }
                         }
-                    }
-                </script>
+                    </script>
+                </div>
             </div>
-
-            <div class="step" id="step3">
+            <div class="step" id="step4" data-step="4" data-group="Preprocessing">
                 <div class="step-title">Preprocessing</div>
                 <div class="step-content">
                     <div class="checkbox-group">
@@ -428,7 +615,7 @@
                             const k2Input = document.getElementById('k2');
                             const errorMessageK = document.getElementById('error-message-k');
 
-                            function validateInputs() {
+                            function validateKInputs() {
                                 const k1Value = parseInt(k1Input.value) || 0;
                                 const k2Value = parseInt(k2Input.value) || 0;
 
@@ -447,13 +634,47 @@
                             }
 
                             // Adiciona eventos para validar os inputs em cada alteração
-                            k1Input.addEventListener('input', validateInputs);
-                            k2Input.addEventListener('input', validateInputs);
+                            k1Input.addEventListener('input', validateKInputs);
+                            k2Input.addEventListener('input', validateKInputs);
                         </script>
                     </div>
                 </div>
             </div>
-            <div class="step" id="step4">
+            <div class="step" id="step5" data-step="5" data-group="ModelSelection">
+                <div class="step-title">Model Selection</div>
+                <div class="step-content">
+                    <div class="checkbox-options">
+                        <label class="checkbox-option" for="MLP">
+                            <input type="checkbox" id="MLP" class="checkbox-input"
+                                onchange="handleModelSelection(), validateStep5Live()">
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Multi-Layer Perceptron</span>
+                        </label>
+
+                        <label class="checkbox-option" for="RandomForest">
+                            <input type="checkbox" id="RandomForest" class="checkbox-input"
+                                onchange="handleModelSelection(), validateStep5Live()">
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-label">Random Forest</span>
+                        </label>
+                    </div>
+                    <div id="error-message-5" class="error-message" style="margin-top: 0.5rem;"></div>
+                </div>
+                <script>
+                    function validateStep5Live() {
+                        const errorMessageStep5 = document.getElementById('error-message-5');
+                        const mpl = document.getElementById('MLP').checked;
+                        const randomForest = document.getElementById('RandomForest').checked;
+
+                        if (!mpl && !randomForest) {
+                            errorMessageStep5.innerText = "Select at least one model";
+                        } else {
+                            errorMessageStep5.innerText = "";
+                        }
+                    }
+                </script>
+            </div>
+            <div class="step disabled" id="step6" data-step="6" data-group="MLP">
                 <div class="step-title">MLP Hyperparameters</div>
                 <div class="step-content">
                     <div class="checkbox-group">
@@ -575,7 +796,7 @@
                             const alpha2Input = document.getElementById('alpha2');
                             const errorMessageAlpha = document.getElementById('error-message-alpha');
 
-                            function validateInputs() {
+                            function validateAlphaInputs() {
                                 const alpha1Value = parseFloat(alpha1Input.value);
                                 const alpha2Value = parseFloat(alpha2Input.value);
 
@@ -594,8 +815,8 @@
                             }
 
                             // Adiciona eventos para validar os inputs em cada alteração
-                            alpha1Input.addEventListener('input', validateInputs);
-                            alpha2Input.addEventListener('input', validateInputs);
+                            alpha1Input.addEventListener('input', validateAlphaInputs);
+                            alpha2Input.addEventListener('input', validateAlphaInputs);
                         </script>
                     </div>
                     <div class="checkbox-group">
@@ -635,7 +856,7 @@
                             const epoch2Input = document.getElementById('epoch2');
                             const errorMessageEpoch = document.getElementById('error-message-epoch');
 
-                            function validateInputs() {
+                            function validateEpochInputs() {
                                 const epoch1Value = parseInt(epoch1Input.value) || 0;
                                 const epoch2Value = parseFloat(epoch2Input.value) || 0;
 
@@ -654,13 +875,13 @@
                             }
 
                             // Adiciona eventos para validar os inputs em cada alteração
-                            epoch1Input.addEventListener('input', validateInputs);
-                            epoch2Input.addEventListener('input', validateInputs);
+                            epoch1Input.addEventListener('input', validateEpochInputs);
+                            epoch2Input.addEventListener('input', validateEpochInputs);
                         </script>
                     </div>
                 </div>
             </div>
-            <div class="step" id="step5">
+            <div class="step disabled" id="step7" data-step="7" data-group="MLP">
                 <div class="step-title">MLP Hyperparameters</div>
                 <div class="step-content">
                     <div class="checkbox-group">
@@ -849,7 +1070,7 @@
                             const lr2Input = document.getElementById('lr2');
                             const errorMessageILR = document.getElementById('error-message-ilr');
 
-                            function validateInputs() {
+                            function validateLRInputs() {
                                 const lr1Value = parseFloat(lr1Input.value);
                                 const lr2Value = parseFloat(lr2Input.value);
 
@@ -868,8 +1089,8 @@
                             }
 
                             // Adiciona eventos para validar os inputs em cada alteração
-                            lr1Input.addEventListener('input', validateInputs);
-                            lr2Input.addEventListener('input', validateInputs);
+                            lr1Input.addEventListener('input', validateLRInputs);
+                            lr2Input.addEventListener('input', validateLRInputs);
                         </script>
                         <script>
                             const adamCheckbox = document.getElementById('adam');
@@ -893,7 +1114,7 @@
                     </div>
                 </div>
             </div>
-            <div class="step" id="step6">
+            <div class="step disabled" id="step8" data-step="8" data-group="MLP">
                 <div class="step-title">MLP Hyperparameters</div>
                 <div class="step-content">
                     <div class="checkbox-group">
@@ -1076,7 +1297,13 @@
                     </div>
                 </div>
             </div>
-            <div class="step" id="step7">
+            <div class="step disabled" id="step9" data-step="9" data-group="RandomForest">
+                <div class="step-title">Random Forests Hyperparameters</div>
+                <div class="step-content">
+
+                </div>
+            </div>
+            <div class="step" id="step10" data-step="10" data-group="ModelTraining">
                 <div class="step-title">Model Training</div>
                 <div class="step-content">
                     <div class="checkbox-group">
@@ -1298,14 +1525,7 @@
             </div>
             <div class="navigation buttons">
                 <button type="button" id="prevBtn" onclick="prevStep()" disabled>Previous</button>
-                <span class="dots">
-                    <span class="dot" onclick="goToStep(1)"></span>
-                    <span class="dot" onclick="goToStep(2)"></span>
-                    <span class="dot" onclick="goToStep(3)"></span>
-                    <span class="dot" onclick="goToStep(4)"></span>
-                    <span class="dot" onclick="goToStep(5)"></span>
-                    <span class="dot" onclick="goToStep(6)"></span>
-                    <span class="dot" onclick="goToStep(7)"></span>
+                <span class="dots" id="dots-container">
                 </span>
                 <button type="button" id="nextBtn" onclick="nextStep()">Next</button>
             </div>
@@ -1316,107 +1536,225 @@
     </div>
     <script>
         let currentStep = 0;
-        const steps = document.querySelectorAll(".step");
-        const prevBtn = document.getElementById("prevBtn");
-        const nextBtn = document.getElementById("nextBtn");
-        const dots = document.querySelectorAll(".dot");
 
-        function showStep(stepIndex) {
-            steps.forEach((step, index) => {
-                step.classList.toggle("active", index === stepIndex);
+        function handleModelSelection() {
+            const mlp = document.getElementById("MLP").checked;
+            const randomForest = document.getElementById("RandomForest").checked;
+
+            const mlpSteps = document.querySelectorAll('[data-group="MLP"]');
+            mlpSteps.forEach(step => {
+                if (mlp) {
+                    step.classList.remove('disabled');
+                } else {
+                    step.classList.add('disabled');
+                }
             });
 
-            prevBtn.disabled = (stepIndex === 0);
-            nextBtn.disabled = (stepIndex === steps.length - 1);
-            // submitBtn.style.display = (stepIndex === steps.length - 1) ? "inline" : "none";
+            const randomForestSteps = document.querySelectorAll('[data-group="RandomForest"]');
+            randomForestSteps.forEach(step => {
+                if (randomForest) {
+                    step.classList.remove('disabled');
+                } else {
+                    step.classList.add('disabled');
+                }
+            });
 
-            // Atualiza os dots de navegação
+            updateNavigation();
+
+            if (getCurrentStep().classList.contains('disabled')) {
+                currentStep = 3;
+                showStep(currentStep);
+            } else {
+
+                updateContainerStyle();
+            }
+        }
+
+        function getEnabledSteps() {
+            return document.querySelectorAll('.step:not(.disabled)');
+        }
+
+        function getCurrentStep() {
+            const enabledSteps = getEnabledSteps();
+            return enabledSteps[currentStep];
+        }
+
+        function updateNavigation() {
+            const dotsContainer = document.getElementById('dots-container');
+            const enabledSteps = getEnabledSteps();
+
+            dotsContainer.innerHTML = '';
+
+            enabledSteps.forEach((step, index) => {
+                const dot = document.createElement('span');
+                dot.className = 'dot';
+                if (index === currentStep) dot.classList.add('active-dot');
+                dot.onclick = () => goToStep(index + 1);
+                dotsContainer.appendChild(dot);
+            });
+        }
+
+        function updateContainerStyle() {
+            const container = document.getElementById("container-geral");
+            const enabledSteps = getEnabledSteps();
+
+            if (enabledSteps.length === 0) return;
+
+            const currentStepElement = enabledSteps[currentStep];
+            const currentGroup = currentStepElement.getAttribute('data-group');
+
+            container.classList.remove('group-blue', 'group-orange');
+
+            const groupOrder = [];
+            enabledSteps.forEach(step => {
+                const group = step.getAttribute('data-group');
+                if (!groupOrder.includes(group)) {
+                    groupOrder.push(group);
+                }
+            });
+
+            const groupIndex = groupOrder.indexOf(currentGroup);
+
+            const colorClass = (groupIndex % 2 === 0) ? 'group-blue' : 'group-orange';
+            container.classList.add(colorClass);
+        }
+
+        function showStep(stepIndex) {
+            const enabledSteps = getEnabledSteps();
+
+            document.querySelectorAll('.step').forEach(step => {
+                step.classList.remove('active');
+            });
+
+            if (enabledSteps[stepIndex]) {
+                enabledSteps[stepIndex].classList.add('active');
+            }
+
+            const prevBtn = document.getElementById("prevBtn");
+            const nextBtn = document.getElementById("nextBtn");
+
+            prevBtn.disabled = (stepIndex === 0);
+            nextBtn.disabled = (stepIndex === enabledSteps.length - 1);
+
+            const dots = document.querySelectorAll(".dot");
             dots.forEach((dot, index) => {
                 dot.classList.toggle("active-dot", index === stepIndex);
             });
+
+            updateContainerStyle();
         }
 
         function nextStep() {
             if (validateStep(currentStep)) {
-                currentStep++;
-                showStep(currentStep);
+                const enabledSteps = getEnabledSteps();
+                if (currentStep < enabledSteps.length - 1) {
+                    currentStep++;
+                    showStep(currentStep);
+                }
             }
         }
 
         function prevStep() {
-            currentStep--;
-            showStep(currentStep);
+            if (currentStep > 0) {
+                currentStep--;
+                showStep(currentStep);
+            }
         }
 
         function goToStep(step) {
             const stepIndex = step - 1;
-            if (stepIndex >= 0 && stepIndex < steps.length && validateStep(currentStep) && currentStep != 0) {
+            const enabledSteps = getEnabledSteps();
+            if (stepIndex >= 0 && stepIndex < enabledSteps.length && validateStep(currentStep)) {
                 currentStep = stepIndex;
                 showStep(currentStep);
             }
         }
 
         function validateStep(stepIndex) {
-            const inputs = steps[stepIndex].querySelectorAll("input[required]");
-            const step = stepIndex + 1
-            if (step == 2) {
+            const enabledSteps = getEnabledSteps();
+            const currentStepElement = enabledSteps[stepIndex];
+            const stepNumber = parseInt(currentStepElement.getAttribute('data-step'));
+
+            if (stepNumber == 2) {
                 const errorMessageStep2 = document.getElementById('error-message-step2');
                 const datasetName = document.getElementById('datasetFileName');
                 if (datasetName == "No dataset selected") {
                     errorMessageStep2.innerText = "Select your dataset.";
                     return false
-                } else if (document.querySelectorAll('#checkbox-list-target input[type="checkbox"]:checked').length === 0) {
-                    errorMessageStep2.innerText = "Select your model's target feature";
-                    return false
                 } else {
                     errorMessageStep2.innerText = "";
                     return true
                 }
-            } else if (step == 3) {
+            } else if (stepNumber == 3) {
+                const errorMessageStep3 = document.getElementById('error-message-step3');
+                if (document.querySelectorAll('#checkbox-list-target input[type="checkbox"]:checked').length === 0) {
+                    errorMessageStep3.innerText = "Select your model's target feature";
+                    return false
+                } else {
+                    errorMessageStep3.innerText = "";
+                    return true
+                }
+            } else if (stepNumber === 4) {
                 const errorMessageK = document.getElementById('error-message-k');
                 const errorMessageSF = document.getElementById('error-message-SF');
                 const errorMessageFS = document.getElementById('error-message-FS');
-                if (errorMessageK.innerText != "" || errorMessageFS.innerText != "" || errorMessageSF.innerText != "") {
-                    return false
+                validateKInputs();
+                validateSF();
+                validateFS();
+
+                if (errorMessageK.innerText !== "" || errorMessageFS.innerText !== "" || errorMessageSF.innerText !== "") {
+                    return false;
                 } else {
+                    return true;
+                }
+            } else if (stepNumber == 5) {
+                const errorMessageStep5 = document.getElementById('error-message-5');
+                const mpl = document.getElementById('MLP').checked;
+                const randomForest = document.getElementById('RandomForest').checked;
+                if (!mpl && !randomForest) {
+                    errorMessageStep5.innerText = "Select at least one model";
+                    return false;
+                }
+                else {
+                    errorMessageStep5.innerText = "";
                     return true
                 }
-            } else if (step == 4) {
+            } else if (stepNumber === 6) {
                 const errorMessageAF = document.getElementById('error-message-AF');
                 const errorMessageAlpha = document.getElementById('error-message-alpha');
                 const errorMessageEpoch = document.getElementById('error-message-epoch');
-                if (errorMessageAF.innerText != "" || errorMessageAlpha.innerText != "" || errorMessageEpoch.innerText != "") {
-                    return false
+                if (errorMessageAF.innerText !== "" || errorMessageAlpha.innerText !== "" || errorMessageEpoch.innerText !== "") {
+                    return false;
                 } else {
-                    return true
+                    return true;
                 }
-            } else if (step == 5) {
+            } else if (stepNumber === 7) {
                 const errorMessageSolver = document.getElementById('error-message-solver');
                 const errorMessageLR = document.getElementById('error-message-lr');
                 const errorMessageILR = document.getElementById('error-message-ilr');
-                if (errorMessageSolver.innerText != "" || errorMessageLR.innerText != "" || errorMessageILR.innerText != "") {
-                    return false
+                if (errorMessageSolver.innerText !== "" || errorMessageLR.innerText !== "" || errorMessageILR.innerText !== "") {
+                    return false;
                 } else {
-                    return true
+                    return true;
                 }
-            } else if (step == 6) {
+            } else if (stepNumber === 8) {
                 const errorMessageHL = document.getElementById('error-message-hl');
-                if (errorMessageHL.innerText != "") {
-                    return false
+                if (errorMessageHL.innerText !== "") {
+                    return false;
                 } else {
-                    return true
+                    return true;
                 }
             }
+            const inputs = currentStepElement.querySelectorAll("input[required]");
             for (let input of inputs) {
                 if (!input.checkValidity()) {
-
-
                     return false;
                 }
             }
             return true;
         }
         showStep(currentStep);
+        updateNavigation(); 
     </script>
     <script>
         document.querySelectorAll('.option-tooltip').forEach(container => {
