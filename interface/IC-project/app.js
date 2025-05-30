@@ -126,14 +126,16 @@ app.get('/datasetFileName', (req, res) => {
       return res.status(500).send('Erro ao ler o diretório do dataset');
     }
 
-    if (files.length === 0) {
+    const datasetFiles = files.filter(file => file.endsWith('.csv') || file.endsWith('.xlsx'));
+
+    if (datasetFiles.length === 0) {
       return res.status(404).send('Nenhum dataset selecionado');
     }
-
-    const fileName = files[0]; // Aqui, estamos assumindo que há apenas um arquivo na pasta
+    
+    const fileName = datasetFiles[0]; //Assumindo que há apenas um arquivo na pasta
 
     // Executa o script Python
-    const pythonProcess = spawn('python', ['dataset.py']);
+    const pythonProcess = spawn('python', ['dataset.py', fileName]);
 
     let output = ''; // Para acumular a saída do script Python
 
@@ -162,6 +164,7 @@ app.get('/datasetFileName', (req, res) => {
           fileName,
           numVariaveis: parsedOutput.num_variaveis,
           variaveis: parsedOutput.variaveis,
+          descritiva_base: parsedOutput.descritiva_base
         });
       } catch (error) {
         console.error('Erro ao analisar o JSON:', error);

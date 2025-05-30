@@ -16,11 +16,9 @@ body {
   padding: 15px;
 }
 
-.container_geral {
-  background-color: #d9edf7;
+#container-geral {
   border-radius: 10px;
   padding: 30px;
-  border: 1px solid #f4a840;
   margin: auto;
   width: 80%;
   height: 75%;
@@ -30,6 +28,24 @@ body {
   align-items: center;
   box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
   position: relative;
+}
+
+.container_geral.group-blue {
+  background-color: #d9edf7;
+  --border-color-out: #f4a840;
+  --border-color-in: #008c9e;
+  --primary-color: #005f73;
+  --secondary-color: #8cc6d6;
+  border: 1px solid var(--border-color-out);
+}
+
+.container_geral.group-orange {
+  background-color: #f5e8d5;
+  --border-color-out: #008c9e;
+  --border-color-in: #f4a840;
+  --primary-color: #de8404;
+  --secondary-color: #f0ce9e;
+  border: 1px solid var(--border-color-out);
 }
 
 .step-title {
@@ -67,7 +83,7 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-top: 20px;
+  padding: 5px;
 }
 
 .dot {
@@ -110,13 +126,13 @@ body {
 .step.active {
   min-width: 100%;
   max-height: 100%;
-  min-height: 93%;
+  min-height: 95%;
   display: flex;
   flex-direction: column;
+  padding: 5px;
 }
 
 .buttons {
-  margin-top: 20px;
   display: flex;
   gap: 10px;
 }
@@ -146,12 +162,11 @@ button:disabled {
 }
 
 .checkbox-group {
-  --primary-color: #005f73;
   --text-color: #2c3e50;
   --secondary-text: #7f8c8d;
-  border: 1px solid #f4a840;
   background-color: #f9f9f9;
   border-radius: 8px;
+  border: 1px solid var(--border-color-out);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   padding: 1.25rem;
@@ -212,7 +227,7 @@ button:disabled {
 }
 
 .checkbox-option:hover .checkbox-custom {
-  border-color: #8cc6d6;
+  border-color: var(--secondary-color);
   transform: scale(1.05);
 }
 
@@ -286,7 +301,7 @@ button:disabled {
 .input-wrapper {
   display: flex;
   align-items: center;
-  border: 1px solid #005f73;
+  border: 1px solid var(--border-color-in);
   border-radius: 4px;
   background: white;
   transition: all 0.2s ease;
@@ -294,8 +309,8 @@ button:disabled {
 }
 
 .input-wrapper:focus-within {
-  border-color: #008c9e;
-  box-shadow: 0 0 0 2px rgba(0, 140, 158, 0.2);
+  border-color: var(--border-color-in);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--border-color-in) 20%, transparent);
 }
 
 .range-input {
@@ -656,7 +671,7 @@ h2 {
   align-self: center;
   white-space: nowrap;
   padding: 15px;
-  border: 1px solid #f4a840;
+  border: 1px solid var(--border-color-out);
   background-color: #f9f9f9;
   border-radius: 8px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
@@ -677,7 +692,7 @@ h2 {
   position: relative;
   padding-left: 1.75rem;
   min-height: 1.5rem;
-  margin: 5px 0;
+  margin: 5px;
 }
 
 .checkbox-list .checkbox-input {
@@ -694,7 +709,7 @@ h2 {
   height: 1.125rem;
   width: 1.125rem;
   background-color: white;
-  border: 2px solid var(--primary-color, #005f73);
+  border: 2px solid var(--primary-color);
   border-radius: 4px;
   transition: all 0.2s ease;
 }
@@ -705,12 +720,12 @@ h2 {
 }
 
 .checkbox-list .checkbox-option:hover .checkbox-custom {
-  border-color: #8cc6d6;
+  border-color: var(--secondary-color);
   transform: scale(1.05);
 }
 
 .checkbox-list .checkbox-input:checked~.checkbox-custom {
-  background-color: var(--primary-color, #005f73);
+  background-color: var(--primary-color);
 }
 
 .checkbox-list .checkbox-custom:after {
@@ -850,4 +865,82 @@ h2 {
   left: -5px;
   margin-top: -5px;
   border-color: transparent #8cc6d6 transparent transparent;
+}
+
+/***/
+.table-wrapper {
+  max-width: 100%;
+  margin-top: 1rem;
+  border: 2px solid var(--border-color-out);
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: #f9f9f9;
+}
+
+.table-header {
+  background-color: #f4f4f4;
+  border-bottom: 2px solid var(--border-color-out);
+  overflow-x: hidden;
+}
+
+.table-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.descriptive-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  font-size: 0.9rem;
+  color: #333;
+  background-color: #f9f9f9;
+  table-layout: fixed;
+  /* Essencial para controle de largura de coluna */
+}
+
+.descriptive-table th,
+.descriptive-table td {
+  border-bottom: 1px solid #ccc;
+  padding: 10px;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.descriptive-table td {
+  overflow: auto;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative;
+  cursor: default;
+}
+
+/* Header fixo fora da área de scroll */
+.table-header .descriptive-table th {
+  background-color: #f4f4f4;
+  border-bottom: none;
+  position: relative;
+}
+
+/* Corpo da tabela dentro da área de scroll */
+.table-scroll .descriptive-table tbody tr:hover {
+  background-color: #fafafa;
+}
+
+.descriptive-table td.has-overflow:hover::after {
+  content: attr(data-fulltext);
+  position: absolute;
+  left: 0;
+  top: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 5px 8px;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  white-space: normal;
+  max-width: 300px;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
 }
