@@ -1,14 +1,15 @@
 NumFolds: 5
-Scalers: MinMaxScaler, StandardScaler
-minK: 1, maxK: 1
-Score Function: f_classif, chi2, mutual_info_classif
-Activation Function: relu, logistic, tanh, identity
-Solver: adam, lbfgs, sgd
-Learning Rate: constant, adaptive, invscaling
-minLearningRateInit: 0.0001, maxLearningRateInit: 0.1
-minAlfa: 0.00001, maxAlfa: 0.1
-Hidden Layer Sizes: (150, 100, 50), (100, 50), (200, 150, 100, 50), (200, 200, 100)
-minEpochs: 1000, maxEpochs: 10000
 NumTrials: 100
+Score Metric: accuracy
+Scalers: MinMaxScaler, StandardScaler
+minK: 1, maxK: 8
+Score Function: f_classif, chi2, mutual_info_classif
+Model Selection: Random Forest
+minNEstimators: 100, maxNEstimators: 1000
+minMaxDepth: 3, maxMaxDepth: 50
+Max Features: sqrt, log2, None
+Criterion: gini, entropy, log_loss
+minMinSamplesLeaf: 1, maxMinSamplesLeaf: 10
+minMinSamplesSplit: 2, maxMinSamplesSplit: 20
 Var Target: target
 Var Deleted: 

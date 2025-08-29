@@ -7,17 +7,30 @@ var bodyParser = require('body-parser');
 var { spawn } = require('child_process');
 var multer = require('multer');
 var fs = require('fs');
+var WebSocket = require('ws');
 var os = require('os');
+var http = require('http');
 
 // Define route var
 var usersRouter = require('./routes/users');
 var indexRouter = require('./routes/index');
 var modelDevRouter = require('./routes/modelDev');
-var modelDevOldRouter = require('./routes/modelDevOld');
 var modelAppRouter = require('./routes/modelApp');
-var modelAppOldRouter = require('./routes/modelAppOld');
 
 var app = express();
+const wss = new WebSocket.Server({ port: 3001 });
+
+let currentWebSocket = null;
+
+wss.on('connection', (ws) => {
+    console.log('Cliente conectado via WebSocket');
+    currentWebSocket = ws;
+    
+    ws.on('close', () => {
+        console.log('Cliente desconectado via WebSocket');
+        currentWebSocket = null;
+    });
+});
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -113,9 +126,7 @@ app.post('/uploadModel', upload.single('uploadModel'), (req, res) => {
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/modelDev', modelDevRouter);
-app.use('/modelDevOld', modelDevOldRouter);
 app.use('/modelApp', modelAppRouter);
-app.use('/modelAppOld', modelAppOldRouter);
 
 //----------------------------------- Get File Name --------------------------------\\
 app.get('/datasetFileName', (req, res) => {
@@ -132,7 +143,7 @@ app.get('/datasetFileName', (req, res) => {
       return res.status(404).send('Nenhum dataset selecionado');
     }
     
-    const fileName = datasetFiles[0]; //Assumindo que há apenas um arquivo na pasta
+    const fileName = datasetFiles[0]; //Assumindo apenas um arquivo na pasta
 
     // Executa o script Python
     const pythonProcess = spawn('python', ['dataset.py', fileName]);
@@ -186,7 +197,7 @@ app.get('/modelFileName', (req, res) => {
       return res.status(404).send('nenhum modelo selecionado');
     }
 
-    const fileName = files[0]; // Aqui, estamos assumindo que há apenas um arquivo na pasta
+    const fileName = files[0]; // Assumindo apenas um arquivo na pasta
 
     res.json({ fileName});
   });
@@ -210,7 +221,21 @@ app.post("/processSelectedData", (req, res) => {
   });
 
   pythonProcess.stderr.on('data', (data) => {
-    console.error("Erro ao executar o script Python:", data); // Log de erros do script
+      const message = data.toString();
+      console.error('Erro no script Python:', message);
+
+      // Verifica se é uma mensagem de progresso
+      if (message.includes('[PROGRESS]')) {
+          if (currentWebSocket && currentWebSocket.readyState === WebSocket.OPEN) {
+              console.log('Enviando mensagem via WebSocket:', message); // Para debug
+              currentWebSocket.send(JSON.stringify({ 
+                  type: 'progress', 
+                  message: message.replace('[PROGRESS] ', '') 
+              }));
+          } else {
+              console.log('WebSocket não está conectado'); // Para debug
+          }
+      }
   });
 
   pythonProcess.stdout.on('data', (data) => {
@@ -246,8 +271,38 @@ app.post('/trainGridModel', (req, res) => {
       output += data.toString();
     });
 
+    let stderrBuffer = '';
+
     pythonProcess.stderr.on('data', (data) => {
-      console.error('Erro no script Python:', data.toString());
+        stderrBuffer += data.toString();
+        
+        // Processa linhas completas
+        let lines = stderrBuffer.split('\n');
+        stderrBuffer = lines.pop();
+        
+        lines.forEach(line => {
+            if (line.trim() === '') return;
+            
+            console.error('Erro no script Python:', line);
+            
+            if (line.includes('[PROGRESS]')) {
+                if (currentWebSocket && currentWebSocket.readyState === WebSocket.OPEN) {
+                    currentWebSocket.send(JSON.stringify({ 
+                        type: 'progress', 
+                        message: line.replace('[PROGRESS] ', '') 
+                    }));
+                }
+            }
+            
+            if (line.includes('[TRAINING]')) {
+                if (currentWebSocket && currentWebSocket.readyState === WebSocket.OPEN) {
+                    currentWebSocket.send(JSON.stringify({ 
+                        type: 'training', 
+                        message: line.replace('[TRAINING] ', '') 
+                    }));
+                }
+            }
+        });
     });
 
     pythonProcess.on('close', (code) => {
@@ -277,57 +332,106 @@ app.post('/trainGridModel', (req, res) => {
   });
 });
 
-// Explicação Lime
-app.post('/uploadSample', upload.single('uploadSample'), (req, res) => {
-  // Check for upload errors
-  if (req.fileValidationError) {
-    return res.status(400).send('Invalid file format');
-  } else if (!req.file) {
-    return res.status(400).send('No file uploaded');
-  }
-
-  // Move the uploaded file to the desired location
-  const filePath = path.join(__dirname, 'public/sample', req.file.originalname);
-  fs.renameSync(req.file.path, filePath);  // Move the file to 'public/sample'
-
-  // Execute the Python script with the file path as an argument
-  const pythonProcess = spawn('python', ['limeEXP.py', filePath]);
+// Explicação SHAP
+app.post('/shapEXP', (req, res) => {
+  console.log('Iniciando processo de explicação SHAP...');
+  
+  // Executa o script Python para gerar explicações SHAP
+  const pythonProcess = spawn('python', ['shapEXP.py']);
 
   let output = '';
 
-  // Capture the output from the Python script
   pythonProcess.stdout.on('data', (data) => {
     output += data.toString();
   });
 
-  // Capture any errors from the Python script
   pythonProcess.stderr.on('data', (data) => {
-    console.error('Erro no script Python:', data.toString());
+    const message = data.toString();
+    console.error('Erro no script SHAP:', message);
+
+    // Verifica se é uma mensagem de progresso
+    if (message.includes('[PROGRESS]')) {
+      if (currentWebSocket && currentWebSocket.readyState === WebSocket.OPEN) {
+        console.log('Enviando progresso SHAP via WebSocket:', message);
+        currentWebSocket.send(JSON.stringify({ 
+          type: 'shap_progress', 
+          message: message.replace('[PROGRESS] ', '') 
+        }));
+      }
+    }
   });
 
-  // When the Python script finishes
   pythonProcess.on('close', (code) => {
     if (code === 0) {
       try {
-        // Parseie o JSON gerado pelo script Python
-        const explanationData = JSON.parse(output);
-
-        // Log do resultado parseado
-        console.log("Output parseado:", explanationData);
-
-        // Envie o JSON como resposta para o front-end
-        res.json(explanationData);
+        console.log("Raw output do script SHAP:", output);
+        
+        // Parse o JSON retornado pelo script Python
+        const parsedOutput = JSON.parse(output);
+        
+        console.log("Output SHAP parseado:", parsedOutput);
+        
+        // Retorna o JSON completo para o frontend
+        res.json(parsedOutput);
       } catch (parseError) {
-        console.error("Erro ao interpretar o resultado do script Python:", parseError);
-        res.status(500).send('Erro ao interpretar o resultado do script Python');
+        console.error("Erro ao interpretar JSON do SHAP:", parseError);
+        res.status(500).send('Erro ao interpretar o resultado do script SHAP');
       }
     } else {
-      console.error("Erro no script Python, código:", code);
-      res.status(500).send('Erro ao executar o script Python');
+      console.error("Erro no script SHAP, código:", code);
+      res.status(500).send('Erro ao executar o script SHAP');
     }
+  });
+});
+// Explicação LIME
+app.post('/limeEXP', (req, res) => {
+  console.log('Iniciando processo de explicação LIME...');
+  
+  // Executa o script Python para gerar explicações LIME
+  const pythonProcess = spawn('python', ['limeEXP.py']);
 
-    // Deletar o arquivo após o processamento
-    fs.unlinkSync(filePath); 
+  let output = '';
+
+  pythonProcess.stdout.on('data', (data) => {
+    output += data.toString();
+  });
+
+  pythonProcess.stderr.on('data', (data) => {
+    const message = data.toString();
+    console.error('Erro no script LIME:', message);
+
+    // Verifica se é uma mensagem de progresso
+    if (message.includes('[PROGRESS]')) {
+      if (currentWebSocket && currentWebSocket.readyState === WebSocket.OPEN) {
+        console.log('Enviando progresso LIME via WebSocket:', message);
+        currentWebSocket.send(JSON.stringify({ 
+          type: 'lime_progress', 
+          message: message.replace('[PROGRESS] ', '') 
+        }));
+      }
+    }
+  });
+
+  pythonProcess.on('close', (code) => {
+    if (code === 0) {
+      try {
+        console.log("Raw output do script LIME:", output);
+        
+        // Parse o JSON retornado pelo script Python
+        const parsedOutput = JSON.parse(output);
+        
+        console.log("Output LIME parseado:", parsedOutput);
+        
+        // Retorna o JSON completo para o frontend
+        res.json(parsedOutput);
+      } catch (parseError) {
+        console.error("Erro ao interpretar JSON do LIME:", parseError);
+        res.status(500).send('Erro ao interpretar o resultado do script LIME');
+      }
+    } else {
+      console.error("Erro no script LIME, código:", code);
+      res.status(500).send('Erro ao executar o script LIME');
+    }
   });
 });
 //------------------------------------------------------------------------------\\

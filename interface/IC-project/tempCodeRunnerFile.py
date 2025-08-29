@@ -1,1 +1,0 @@
-json_output = descritiva.reset_index().rename(columns={'index': 'Variável'}).to_json(orient='records', force_ascii=False)
